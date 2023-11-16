@@ -6,7 +6,8 @@ use serde_json;
 use pretty_env_logger;
 use r2d2_sqlite::SqliteConnectionManager;
 use r2d2::Pool;
-use rusqlite::{params, Connection};
+use rusqlite::{params, Connection, Result};
+use rusqlite::NO_PARAMS;
 
 fn create_db_pool() -> Pool<SqliteConnectionManager> {
     let manager = SqliteConnectionManager::file("geo.db");
@@ -14,13 +15,28 @@ fn create_db_pool() -> Pool<SqliteConnectionManager> {
 }
 
 struct Street {
+    id: i32,
     name: String,
     lat:  f64,
     lon:  f64,
 }
 impl Street {
-    fn new(name: &str, lat: f64, lon: f64) -> Self {
-        Street {name: name.to_string(), lat, lon}
+    async fn fetch_all(pool: Pool<SqliteConnectionManager>) -> Result<Vec<Street>> {
+        tokio::task::spawn_blocking(move || {
+            let conn = pool.get().unwrap();
+            let mut stmt = conn.prepare("SELECT * FROM streets;")?;
+            let street_iter = stmt.query_map(NO_PARAMS, |row| {
+                Ok(Street {
+                    id:   row.get(0)?,
+                    name: row.get(1)?,
+                    lat:  row.get(2)?,
+                    lon:  row.get(3)?,
+                })
+            })?;
+            street_iter.collect()
+        })
+        .await
+        .expect("Thread in fetch_all() for Streets panicked!")
     }
 }
 impl fmt::Display for Street {
@@ -35,15 +51,14 @@ async fn main() {
     dotenv().ok();
     pretty_env_logger::init();
 
+    let _db_pool = create_db_pool();
+
     let env_port = env::var("PORT")
         .unwrap()
         .parse()
         .expect("PORT environment variable must be a number");
 
-    let my_street = Street::new("199 Testing Street", 40.15, -40.20);
-
     println!("Starting server on port {}...", env_port);
-    println!("Testing Street model: {}", my_street);
 
     // GET
     let route_hello = warp::path("hello")

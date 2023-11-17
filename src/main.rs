@@ -60,7 +60,6 @@ async fn main() {
     // GET
     let get_hello = warp::path("hello")
         .map(|| warp::reply::html("<h1>Hello, World!</h1>"));
-
     let get_streets = warp::path("streets")
         .and_then(move || {
             let pool = db_pool.clone();
@@ -78,10 +77,17 @@ async fn main() {
         .and(warp::body::content_length_limit(1024 * 16))
         .and(warp::body::json())
         .map(|body: serde_json::Value| warp::reply::json(&body));
+    let post_street = warp::post()
+        .and(warp::path("streets"))
+        .and(warp::body::content_length_limit(1024 * 16))
+        .and(warp::body::json())
+        .map(|body: serde_json::Value| warp::reply::json(&body));
 
+    // Composing final set of routes
     let routes = get_hello
         .or(get_streets)
         .or(post_echo)
+        .or(post_street)
         .with(warp::log("api"));
 
     warp::serve(routes)

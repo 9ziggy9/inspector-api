@@ -1,23 +1,25 @@
 # Use the official Rust image as a parent image
 FROM rust:latest
 
-# Create a new empty shell project
-RUN USER=root cargo new --bin inspector-api
-WORKDIR /inspector-api
+# Create a working directory
+WORKDIR /usr/src/inspector-api
 
-# Copy the Cargo.toml and Cargo.lock to /inspector-api
+# Copy the Cargo.toml and Cargo.lock to /usr/src/inspector-api
 COPY ./Cargo.toml ./Cargo.lock ./
 
-# This build step will cache your dependencies
-RUN cargo build --release
-RUN rm src/*.rs
+# Cache dependencies
+# This step creates a dummy main file to build and cache dependencies
+RUN mkdir src && \
+    echo "fn main() {println!(\"If you see this, the build cache was used\")}" > src/main.rs && \
+    cargo build --release
 
-# Copy your source tree
+# Now copy your actual source tree
 COPY ./src ./src
+COPY ./.env ./
 
-# Build for release
-RUN rm -f ./target/release/deps/inspector-api*
-RUN cargo build --release
+# Rebuild for release, this time with your actual source files
+RUN touch src/main.rs && \
+    cargo build --release
 
 # The final step is the command to run when the container starts
 CMD ["./target/release/inspector-api"]
